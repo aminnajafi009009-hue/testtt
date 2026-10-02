@@ -286,7 +286,7 @@ async def cb_crypto_detail(cb: CallbackQuery):
 async def cb_crypto_toggle(cb: CallbackQuery):
     sym = cb.data.split(":")[-1]
     result = _pm().toggle_crypto(sym)
-    await cb.answer(f"✅ {sym}: {'\u0641\u0639\u0627\u0644' if result else '\u063a\u06cc\u0631\u0641\u0639\u0627\u0644'}")
+    await cb.answer(f"✅ {sym}: {'فعال' if result else 'غیرفعال'}")
     await cb_crypto_detail(cb)
 
 @router.callback_query(F.data.startswith("adm:pm:cry:del:"))
