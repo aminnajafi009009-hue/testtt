@@ -62,7 +62,7 @@ async def cb_settings_main(cb: CallbackQuery, state: FSMContext):
     from db_helpers import get_setting
     maintenance = get_setting("feat:maintenance", False)
     referral    = get_setting("feat:referral", True)
-    status_line = f"🛠️ حالت تعمیرات: {'\u2705 فعال' if maintenance else '\u274c غیرفعال'} | 🤝 رفرال: {'✅' if referral else '❌'}"
+    status_line = f"🛠️ حالت تعمیرات: {'✅ فعال' if maintenance else '❌ غیرفعال'} | 🤝 رفرال: {'✅' if referral else '❌'}"
     await cb.message.edit_text(
         f"⚙️ <b>تنظیمات ربات</b>\n\n{status_line}",
         reply_markup=settings_main_kb(), parse_mode="HTML")
