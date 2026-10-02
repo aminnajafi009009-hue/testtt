@@ -77,12 +77,12 @@ async def cb_card(cb: CallbackQuery):
     c = pm.card
     text = (
         "💳 <b>تنظیمات کارت‌به‌کارت دستی</b>\n\n"
-        f"وضعیت: {'\u2705 فعال' if c.enabled else '\u274c غیرفعال'}\n"
+        f"وضعیت: {'✅ فعال' if c.enabled else '❌ غیرفعال'}\n"
         f"شماره کارت: <code>{c.card_number or 'تنظیم نشده'}</code>\n"
         f"صاحب: {c.owner_name or 'تنظیم نشده'}\n"
         f"بانک: {c.bank_name or 'تنظیم نشده'}\n"
         f"رسید اجباری: {'✅' if c.receipt_required else '❌'}\n"
-        f"تأیید خودکار: {'✅' if c.auto_confirm else '\u274c نیاز تأیید ادمین'}"
+        f"تأیید خودکار: {'✅' if c.auto_confirm else '❌ نیاز تأیید ادمین'}"
     )
     await cb.message.edit_text(text, reply_markup=card_kb(), parse_mode="HTML")
 
@@ -158,7 +158,7 @@ def uniquepay_text() -> str:
     u = _pm().uniquepay
     return (
         "🌐 <b>تنظیمات UniquePay</b>\n\n"
-        f"وضعیت: {'\u2705 فعال' if u.enabled else '\u274c غیرفعال'}\n"
+        f"وضعیت: {'✅ فعال' if u.enabled else '❌ غیرفعال'}\n"
         f"Token: <code>{'*'*8 + u.business_token[-4:] if u.business_token else 'تنظیم نشده'}</code>\n"
         f"Redirect: {u.redirect_url or 'تنظیم نشده'}\n"
         f"Callback: {u.callback_url or 'تنظیم نشده'}\n"
@@ -269,7 +269,7 @@ async def cb_crypto_detail(cb: CallbackQuery):
     text = (
         f"{c.emoji} <b>{c.name} ({c.symbol})</b>\n\n"
         f"شبکه: {c.network}\n"
-        f"وضعیت: {'\u2705 فعال' if c.enabled else '\u274c غیرفعال'}\n"
+        f"وضعیت: {'✅ فعال' if c.enabled else '❌ غیرفعال'}\n"
         f"آدرس کیف پول: <code>{c.wallet or 'تنظیم نشده'}</code>\n"
         f"مارجین: {c.margin_percent}%"
     )
@@ -388,7 +388,7 @@ async def cb_paygo(cb: CallbackQuery):
     p = _pm().paygo
     text = (
         "🔄 <b>Pay As You Go</b>\n\n"
-        f"وضعیت: {'\u2705 فعال' if p.enabled else '\u274c غیرفعال'}\n"
+        f"وضعیت: {'✅ فعال' if p.enabled else '❌ غیرفعال'}\n"
         f"قیمت هر GB: {p.price_per_gb:,} تومان\n"
         f"قیمت هر روز: {p.price_per_day:,} تومان\n"
         f"حداقل موجودی: {p.min_balance:,} تومان\n"
