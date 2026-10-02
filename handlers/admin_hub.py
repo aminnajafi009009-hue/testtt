@@ -1,20 +1,58 @@
 """
 handlers/admin_hub.py — بهبودیافته
-تغییرات نسبت به نسخه قبلی:
-  - adm:broadcast حذف شد — اینجا handle نمی‌شه، در broadcast_handler.py هندل می‌شه (باگ دو مسیر حل شد)
-  - اضافه: مدیریت دیسکانت‌ها، لاگ‌ها، بکاپ‌گیری
+تغییرات:
+  - AdminStates اضافه شد (برای admin_payments_hub)
+  - TicketReply FSM کامل‌شد
+  - import غیرضروری داخل تابع حذف شد
 """
 from __future__ import annotations
 import logging
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
+# ================================================================
+# AdminStates — استیت‌های FSM پنل ادمین
+# (import‌شده توسط سایر handler‌ها)
+# ================================================================
+class AdminStates(StatesGroup):
+    # --- پرداخت: کارت ---
+    pm_card_number     = State()
+    pm_card_owner      = State()
+    pm_card_bank       = State()
+    # --- پرداخت: UniquePay ---
+    pm_uniquepay_token = State()
+    pm_uniquepay_redir = State()
+    # --- پرداخت: ارز دیجیتال ---
+    pm_crypto_wallet   = State()
+    pm_crypto_symbol   = State()
+    pm_crypto_name     = State()
+    pm_crypto_network  = State()
+    pm_crypto_emoji    = State()
+    # --- پرداخت: PayGo ---
+    pm_paygo_gb        = State()
+    pm_paygo_day       = State()
+    pm_paygo_min       = State()
+    pm_paygo_suspend   = State()
+    # --- پرداخت: کیف پول ---
+    pm_wallet_min      = State()
+    pm_wallet_max      = State()
+    pm_wallet_gift     = State()
+
+
+class TicketReplyState(StatesGroup):
+    wait_reply = State()
+
+
+# ================================================================
+# کمک‌کننده‌ها
+# ================================================================
 def _btn(text, cb): return InlineKeyboardButton(text=text, callback_data=cb)
 def _url_btn(text, url): return InlineKeyboardButton(text=text, url=url)
 def build(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -25,13 +63,13 @@ def build(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
 # ================================================================
 def admin_main_kb() -> InlineKeyboardMarkup:
     return build([
-        [_btn("📊 آمار‌ها",      "adm:stats"),    _btn("👥 کاربران",   "adm:users")],
-        [_btn("📦 سفارش‌ها",     "adm:orders"),   _btn("🎫 پلن‌ها",     "adm:plans")],
-        [_btn("💳 پرداخت‌ها",   "adm:payments"), _btn("🌐 پنل‌ها",     "adm:panels")],
-        [_btn("📣 همگانی",      "adm:broadcast"),_btn("🎁 تست‌ها",     "adm:tests")],
-        [_btn("👮 نمایندگان",  "adm:resellers"),_btn("🏟️ تیکت‌ها",  "adm:tickets")],
+        [_btn("📊 آمار\u200cها",      "adm:stats"),    _btn("👥 کاربران",   "adm:users")],
+        [_btn("📦 سفارش\u200cها",     "adm:orders"),   _btn("🎫 پلن\u200cها",     "adm:plans")],
+        [_btn("💳 پرداخت\u200cها",   "adm:payments"), _btn("🌐 پنل\u200cها",     "adm:panels")],
+        [_btn("📣 همگانی",      "adm:broadcast"),_btn("🎁 تست\u200cها",     "adm:tests")],
+        [_btn("👮 نمایندگان",  "adm:resellers"),_btn("🏟️ تیکت\u200cها",  "adm:tickets")],
         [_btn("⚙️ تنظیمات",     "adm:settings"), _btn("🎁 تخفیف و هدیه","adm:discounts")],
-        [_btn("📜 لاگ‌ها",        "adm:logs"),     _btn("💾 بکاپ‌گیری",  "adm:backup")],
+        [_btn("📜 لاگ\u200cها",        "adm:logs"),     _btn("💾 بکاپ\u200cگیری",  "adm:backup")],
     ])
 
 
@@ -57,7 +95,7 @@ async def cb_main(cb: CallbackQuery, state: FSMContext):
 
 
 # ================================================================
-# آمار‌ها
+# آمارها
 # ================================================================
 @router.callback_query(F.data == "adm:stats")
 async def cb_stats(cb: CallbackQuery):
@@ -81,7 +119,7 @@ async def cb_stats(cb: CallbackQuery):
         f"💰 درآمد امروز: <b>{get_revenue_today():,} تومان</b>\n"
         f"💳 کل درآمد: <b>{get_revenue_total():,} تومان</b>"
     )
-    kb = build([[_btn("🔄 به‌روزرسانی", "adm:stats"), _btn("⬅️ برگشت", "adm:main")]])
+    kb = build([[_btn("🔄 به\u200cروزرسانی", "adm:stats"), _btn("⬅️ برگشت", "adm:main")]])
     await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -92,7 +130,7 @@ async def cb_stats(cb: CallbackQuery):
 async def cb_plans(cb: CallbackQuery):
     from db_helpers import get_all_plans
     plans = get_all_plans()
-    text = "🎫 <b>مدیریت پلن‌ها</b>\n\n"
+    text = "🎫 <b>مدیریت پلن\u200cها</b>\n\n"
     for p in plans[:10]:
         text += f"• <b>{p.get('name')}</b> | {p.get('traffic_gb')}GB/{p.get('duration_days')}روز | {(p.get('price') or 0):,}ت\n"
     if not plans: text += "ℹ️ پلنی وجود ندارد."
@@ -110,7 +148,7 @@ async def cb_plans(cb: CallbackQuery):
 async def cb_panels(cb: CallbackQuery):
     from db_helpers import get_all_panels
     panels = get_all_panels()
-    text = "🌐 <b>مدیریت پنل‌ها</b>\n\n"
+    text = "🌐 <b>مدیریت پنل\u200cها</b>\n\n"
     for p in panels:
         st = "✅" if p.get("is_active") else "❌"
         text += f"{st} <b>{p.get('name')}</b> ({p.get('panel_type')})\n"
@@ -119,7 +157,7 @@ async def cb_panels(cb: CallbackQuery):
         [_btn("➕ پنل جدید",   "adm:panels:add"),
          _btn("🔧 تست اتصال", "adm:panels:test")],
         [_btn("🗑️ حذف پنل",   "adm:panels:del"),
-         _btn("📊 سلامت پنل‌ها","adm:panels:health")],
+         _btn("📊 سلامت پنل\u200cها","adm:panels:health")],
         [_btn("⬅️ برگشت",           "adm:main")],
     ]), parse_mode="HTML")
 
@@ -129,7 +167,7 @@ async def cb_panels(cb: CallbackQuery):
 # ================================================================
 @router.callback_query(F.data == "adm:orders")
 async def cb_orders(cb: CallbackQuery):
-    await cb.message.edit_text("📦 <b>مدیریت سفارش‌ها</b>",
+    await cb.message.edit_text("📦 <b>مدیریت سفارش\u200cها</b>",
         reply_markup=build([
             [_btn("⏳ در انتظار",  "adm:orders:pending"),
              _btn("✅ تأیید شده",  "adm:orders:active")],
@@ -147,10 +185,10 @@ async def cb_tickets(cb: CallbackQuery):
     from db_helpers import get_tickets
     tickets = get_tickets("open")
     if not tickets:
-        text = "🏟️ <b>تیکت‌ها</b>\n\n✔️ تیکت بازی وجود ندارد."
+        text = "🏟️ <b>تیکت\u200cها</b>\n\n✔️ تیکت بازی وجود ندارد."
         rows = [[_btn("⬅️ برگشت", "adm:main")]]
     else:
-        text = f"🏟️ <b>تیکت‌های باز ({len(tickets)} عدد)</b>\n"
+        text = f"🏟️ <b>تیکت\u200cهای باز ({len(tickets)} عدد)</b>\n"
         rows = []
         for t in tickets[:10]:
             uid = t.get('user_id', '?')
@@ -178,13 +216,49 @@ async def cb_ticket_view(cb: CallbackQuery, state: FSMContext):
         + (f"<b>پاسخ:</b>\n{t.get('reply')}" if t.get('reply') else "")
     )
     await state.update_data(reply_ticket_id=tid, reply_user_id=t.get("user_id"))
-    await state.set_state("TicketReply")
-    from aiogram.fsm.state import State, StatesGroup
     await cb.message.edit_text(text, reply_markup=build([
         [_btn("💬 پاسخ دادن",  f"adm:ticket:reply:{tid}"),
          _btn("✔️ بستن",        f"adm:ticket:close:{tid}")],
         [_btn("⬅️ برگشت",           "adm:tickets")],
     ]), parse_mode="HTML")
+
+
+@router.callback_query(F.data.regexp(r"^adm:ticket:reply:(\d+)$"))
+async def cb_ticket_reply_start(cb: CallbackQuery, state: FSMContext):
+    import re
+    tid = int(re.match(r"adm:ticket:reply:(\d+)", cb.data).group(1))
+    await state.update_data(reply_ticket_id=tid)
+    await state.set_state(TicketReplyState.wait_reply)
+    await cb.message.answer(
+        f"💬 پاسخ به تیکت #{tid} را بنویسید:",
+        reply_markup=build([[_btn("❌ لغو", f"adm:ticket:view:{tid}")]])
+    )
+
+
+@router.message(TicketReplyState.wait_reply)
+async def fsm_ticket_reply(msg: Message, state: FSMContext, bot: Bot):
+    d = await state.get_data()
+    tid = d.get("reply_ticket_id")
+    await state.clear()
+    if not tid:
+        return await msg.answer("❌ خطای داخلی. دوباره از منو انتخاب کنید.")
+    reply_text = msg.text or ""
+    from db_helpers import get_ticket, update_ticket_reply
+    t = get_ticket(tid)
+    if not t:
+        return await msg.answer("❌ تیکت یافت نشد.")
+    update_ticket_reply(tid, reply_text)
+    await msg.answer(f"✅ پاسخ تیکت #{tid} ذخیره شد.")
+    user_id = t.get("user_id")
+    if user_id:
+        try:
+            await bot.send_message(
+                user_id,
+                f"📩 <b>پاسخ ادمین به تیکت #{tid}</b>\n\n{reply_text}",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data.regexp(r"^adm:ticket:close:(\d+)$"))
@@ -216,7 +290,7 @@ async def cb_resellers(cb: CallbackQuery):
 async def cb_logs(cb: CallbackQuery):
     from db_helpers import get_admin_activity_log
     logs = get_admin_activity_log(15)
-    text = "📜 <b>لاگ فعالیت‌های ادمین</b>\n\n"
+    text = "📜 <b>لاگ فعالیت\u200cهای ادمین</b>\n\n"
     for log in logs:
         text += f"• <code>{log.get('admin_id')}</code> → <b>{log.get('action')}</b> | {str(log.get('extra',''))[:40]}\n"
     if not logs: text += "ℹ️ لاگی وجود ندارد."
@@ -227,13 +301,13 @@ async def cb_logs(cb: CallbackQuery):
 # بکاپ‌گیری
 # ================================================================
 @router.callback_query(F.data == "adm:backup")
-async def cb_backup(cb: CallbackQuery, bot):
+async def cb_backup(cb: CallbackQuery, bot: Bot):
     from db_helpers import get_admin_ids
     await cb.answer("⏳ در حال تهیه بکاپ...")
     try:
         import aiofiles
-        db_path = "cherry.db"
         import os
+        db_path = "cherry.db"
         if os.path.exists(db_path):
             async with aiofiles.open(db_path, "rb") as f:
                 data = await f.read()
@@ -245,8 +319,9 @@ async def cb_backup(cb: CallbackQuery, bot):
                     BufferedInputFile(data, filename="cherry_backup.db"),
                     caption="💾 بکاپ پایگاه داده")
         else:
-            await cb.message.answer("ℹ️ فایل DB لوکال یافت نشد (Turso remote)."
-                                    " بکاپ از داشبورد تورسو تهیه کنید.")
+            await cb.message.answer(
+                "ℹ️ فایل DB لوکال یافت نشد (Turso remote)."
+                " بکاپ از داشبورد تورسو تهیه کنید.")
     except ImportError:
         await cb.message.answer("ℹ️ بکاپ یا DB لوکال موجود نیست.")
     except Exception as e:
