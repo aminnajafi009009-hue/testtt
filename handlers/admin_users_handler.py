@@ -158,7 +158,7 @@ async def cb_usr_list(cb: CallbackQuery):
         "active":"فعال", "inactive":"غیرفعال", "wallet":"کیفپول مثبت"
     }
     name = FILTER_NAMES.get(filter_type, filter_type)
-    text = f"👥 <b>کاربران — {name}</b> ({total:,} نفر)\n\u0635فحه {page+1}\n"
+    text = f"👥 <b>کاربران — {name}</b> ({total:,} نفر)\nصفحه {page+1}\n"
     if not users:
         text += "\nهیچ کاربری یافت نشد."
         rows = [[_btn("⬅️ برگشت", "adm:users")]]
@@ -317,9 +317,9 @@ async def cb_usr_orders(cb: CallbackQuery):
     text = f"📦 <b>سفارش‌های کاربر {uid}</b>\n"
     for o in orders[:10]:
         if isinstance(o, (list, tuple)):
-            text += f"\n\u2022 #{o[0]} | {o[7]} | {o[3]:,} ت"
+            text += f"\n• #{o[0]} | {o[7]} | {o[3]:,} ت"
         elif isinstance(o, dict):
-            text += f"\n\u2022 #{o.get('id')} | {o.get('status')} | {(o.get('amount') or 0):,} ت"
+            text += f"\n• #{o.get('id')} | {o.get('status')} | {(o.get('amount') or 0):,} ت"
     await cb.message.edit_text(text,
         reply_markup=build([[_btn("⬅️ برگشت", f"adm:usr:view:{uid}")]]),
         parse_mode="HTML")
