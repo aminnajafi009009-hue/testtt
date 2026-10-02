@@ -1,11 +1,10 @@
 """
 handlers/admin_payments_hub.py
-مدیریت کامل روش‌های پردات:
- - کارت‌به‌کارت دستی
- - کیف پول
- - پرداخت آنلاین (UniquePay)
- - ارز دیجیتال دینامیک
- - Pay As You Go
+مدیریت کامل روش‌های پرداخت — فیکسشده:
+ - ImportError: AdminStates از admin_hub برطرف شد
+ - _pm() دیگر از bot اشتباه import نمی‌کند — اكنون singleton درست
+ - FSM handler‌های PayGo اضافه شد
+ - f-string backslash‌ها فیکس شده
 """
 from __future__ import annotations
 import logging
@@ -21,18 +20,30 @@ BACK_PAYMENTS = "adm:payments"
 
 
 # ================================================================
-# دسترسی به payment_manager
+# سینگلتون PaymentManager — فیکس اصلی
+# قبلاً: from bot import pm  → خطا (bot.py وجود ندارد)
+# اکنون: lazy singleton با db_helpers
 # ================================================================
+_pm_instance = None
+
 def _pm():
-    from bot import pm  # سینگلتون
-    return pm
+    global _pm_instance
+    if _pm_instance is None:
+        from payment_manager_v3 import PaymentManager
+        from db_helpers import get_setting, set_setting
+        _pm_instance = PaymentManager(
+            db_get_fn=get_setting,
+            db_set_fn=set_setting,
+        )
+        _pm_instance.load()
+    return _pm_instance
 
 
 # ================================================================
 # استرینگ خلاصه
 # ================================================================
 def payments_summary_text() -> str:
-    return f"💳 <b>روش‌های پرداخت</b>\n\n{_pm().summary()}"
+    return f"💳 <b>روش\u200cهای پرداخت</b>\n\n{_pm().summary()}"
 
 
 # ================================================================
@@ -42,7 +53,7 @@ def payments_main_kb() -> InlineKeyboardMarkup:
     pm = _pm()
     e = lambda b: "✅" if b else "❌"
     return build([
-        [_btn(f"{e(pm.card.enabled)} 💳 کارت‌به‌کارت دستی",  "adm:pm:card")],
+        [_btn(f"{e(pm.card.enabled)} 💳 کارت\u200cبه\u200cکارت دستی",  "adm:pm:card")],
         [_btn(f"{e(pm.wallet.enabled)} 💰 کیف پول",              "adm:pm:wallet")],
         [_btn(f"{e(pm.uniquepay.enabled)} 🌐 پرداخت آنلاین (UniquePay)", "adm:pm:uniquepay")],
         [_btn(f"📊 ارز دیجیتال ({len(pm.enabled_cryptos)} فعال)", "adm:pm:crypto")],
@@ -58,7 +69,7 @@ async def cb_payments_main(cb: CallbackQuery):
 
 
 # ================================================================
-# کارت‌به‌کارت دستی
+# کارت\u200cبه\u200cکارت دستی
 # ================================================================
 def card_kb() -> InlineKeyboardMarkup:
     pm = _pm()
@@ -75,14 +86,17 @@ def card_kb() -> InlineKeyboardMarkup:
 async def cb_card(cb: CallbackQuery):
     pm = _pm()
     c = pm.card
+    enabled_text = "✅ فعال" if c.enabled else "❌ غیرفعال"
+    receipt_text = "✅" if c.receipt_required else "❌"
+    autoconfirm_text = "✅" if c.auto_confirm else "❌ نیاز تأیید ادمین"
     text = (
-        "💳 <b>تنظیمات کارت‌به‌کارت دستی</b>\n\n"
-        f"وضعیت: {'✅ فعال' if c.enabled else '❌ غیرفعال'}\n"
+        "💳 <b>تنظیمات کارت\u200cبه\u200cکارت دستی</b>\n\n"
+        f"وضعیت: {enabled_text}\n"
         f"شماره کارت: <code>{c.card_number or 'تنظیم نشده'}</code>\n"
         f"صاحب: {c.owner_name or 'تنظیم نشده'}\n"
         f"بانک: {c.bank_name or 'تنظیم نشده'}\n"
-        f"رسید اجباری: {'✅' if c.receipt_required else '❌'}\n"
-        f"تأیید خودکار: {'✅' if c.auto_confirm else '❌ نیاز تأیید ادمین'}"
+        f"رسید اجباری: {receipt_text}\n"
+        f"تأیید خودکار: {autoconfirm_text}"
     )
     await cb.message.edit_text(text, reply_markup=card_kb(), parse_mode="HTML")
 
@@ -156,10 +170,12 @@ def uniquepay_kb() -> InlineKeyboardMarkup:
 
 def uniquepay_text() -> str:
     u = _pm().uniquepay
+    token_display = ('*'*8 + u.business_token[-4:]) if u.business_token else 'تنظیم نشده'
+    enabled_text = "✅ فعال" if u.enabled else "❌ غیرفعال"
     return (
         "🌐 <b>تنظیمات UniquePay</b>\n\n"
-        f"وضعیت: {'✅ فعال' if u.enabled else '❌ غیرفعال'}\n"
-        f"Token: <code>{'*'*8 + u.business_token[-4:] if u.business_token else 'تنظیم نشده'}</code>\n"
+        f"وضعیت: {enabled_text}\n"
+        f"Token: <code>{token_display}</code>\n"
         f"Redirect: {u.redirect_url or 'تنظیم نشده'}\n"
         f"Callback: {u.callback_url or 'تنظیم نشده'}\n"
         f"حداقل مبلغ: {u.min_amount:,} تومان"
@@ -189,7 +205,7 @@ async def cb_up_bools(cb: CallbackQuery):
 @router.callback_query(F.data == "adm:pm:up:token")
 async def cb_up_token(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AdminStates.pm_uniquepay_token)
-    await cb.message.answer("🔑 Business Token جدید را وارد کنید:\n⚠️ فقط در سرور نگه‌دارید!")
+    await cb.message.answer("🔑 Business Token جدید را وارد کنید:\n⚠️ فقط در سرور نگه\u200cدارید!")
 
 @router.message(AdminStates.pm_uniquepay_token)
 async def fsm_up_token(msg: Message, state: FSMContext):
@@ -212,14 +228,12 @@ async def fsm_up_redir(msg: Message, state: FSMContext):
 
 @router.callback_query(F.data == "adm:pm:up:test")
 async def cb_up_test(cb: CallbackQuery):
-    """Test UniquePay connection"""
     client = _pm().get_uniquepay_client()
     if not client:
         await cb.answer("❌ UniquePay فعال نیست یا توکن تنظیم نشده.", show_alert=True)
         return
     await cb.answer("⏳ در حال تست...")
     from uniquepay import make_hash_id, UniquePayError
-    import asyncio
     try:
         inv = await client.create_invoice(
             hash_id=make_hash_id(0),
@@ -266,10 +280,11 @@ async def cb_crypto_detail(cb: CallbackQuery):
     if not c:
         await cb.answer("❌ ارز یافت نشد")
         return
+    enabled_text = "✅ فعال" if c.enabled else "❌ غیرفعال"
     text = (
         f"{c.emoji} <b>{c.name} ({c.symbol})</b>\n\n"
         f"شبکه: {c.network}\n"
-        f"وضعیت: {'✅ فعال' if c.enabled else '❌ غیرفعال'}\n"
+        f"وضعیت: {enabled_text}\n"
         f"آدرس کیف پول: <code>{c.wallet or 'تنظیم نشده'}</code>\n"
         f"مارجین: {c.margin_percent}%"
     )
@@ -286,7 +301,8 @@ async def cb_crypto_detail(cb: CallbackQuery):
 async def cb_crypto_toggle(cb: CallbackQuery):
     sym = cb.data.split(":")[-1]
     result = _pm().toggle_crypto(sym)
-    await cb.answer(f"✅ {sym}: {'فعال' if result else 'غیرفعال'}")
+    status = "فعال" if result else "غیرفعال"
+    await cb.answer(f"✅ {sym}: {status}")
     await cb_crypto_detail(cb)
 
 @router.callback_query(F.data.startswith("adm:pm:cry:del:"))
@@ -307,9 +323,24 @@ async def cb_crypto_wallet(cb: CallbackQuery, state: FSMContext):
 async def fsm_crypto_wallet(msg: Message, state: FSMContext):
     d = await state.get_data()
     sym = d.get("crypto_sym", "")
-    _pm().update_crypto(sym, wallet=msg.text.strip())
+    if sym and not d.get("sym"):  # ویرایش کیف پول ارز موجود
+        _pm().update_crypto(sym, wallet=msg.text.strip())
+        await state.clear()
+        await msg.answer("✅ آدرس ذخیره شد.")
+        return
+    # اضافه کردن ارز جدید
+    sym = d.get("sym") or d.get("crypto_sym", "")
+    wallet = "" if msg.text.strip() == "." else msg.text.strip()
+    _pm().add_crypto(
+        symbol=sym,
+        name=d.get("name", sym),
+        network=d.get("network", ""),
+        emoji=d.get("emoji", "💰"),
+        wallet=wallet,
+    )
     await state.clear()
-    await msg.answer(f"✅ آدرس {sym} ذخیره شد.")
+    await msg.answer(f"✅ ارز <b>{sym}</b> اضافه شد!", parse_mode="HTML")
+
 
 # --- اضافه کردن ارز جدید ---
 @router.callback_query(F.data == "adm:pm:cry:add")
@@ -341,34 +372,15 @@ async def fsm_crypto_network(msg: Message, state: FSMContext):
 
 @router.message(AdminStates.pm_crypto_emoji)
 async def fsm_crypto_emoji(msg: Message, state: FSMContext):
-    await state.update_data(emoji=msg.text.strip())
-    await state.set_state(AdminStates.pm_crypto_wallet)
-    await state.update_data(crypto_sym=(await state.get_data()).get("sym",""))
-    await msg.answer("آدرس کیف پول را وارد کنید:\n(برای فعلاً خالی بگذارید: . بفرستید)")
-
-@router.message(AdminStates.pm_crypto_wallet)
-async def fsm_crypto_wallet_new(msg: Message, state: FSMContext):
     d = await state.get_data()
-    sym = d.get("sym") or d.get("crypto_sym", "")
-    if not sym:  # ویرایش کیف پول ارز موجود
-        _pm().update_crypto(d.get("crypto_sym",""), wallet=msg.text.strip())
-        await state.clear()
-        await msg.answer("✅ آدرس ذخیره شد.")
-        return
-    wallet = "" if msg.text.strip() == "." else msg.text.strip()
-    _pm().add_crypto(
-        symbol=sym,
-        name=d.get("name", sym),
-        network=d.get("network", ""),
-        emoji=d.get("emoji", "💰"),
-        wallet=wallet,
-    )
-    await state.clear()
-    await msg.answer(f"✅ ارز <b>{sym}</b> اضافه شد!", parse_mode="HTML")
+    await state.update_data(emoji=msg.text.strip())
+    await state.update_data(crypto_sym=d.get("sym", ""))
+    await state.set_state(AdminStates.pm_crypto_wallet)
+    await msg.answer("آدرس کیف پول را وارد کنید:\n(برای فعلاً خالی بگذارید: . بفرستید)")
 
 
 # ================================================================
-# Pay As You Go
+# Pay As You Go — کامل با FSM handler‌ها
 # ================================================================
 def paygo_kb() -> InlineKeyboardMarkup:
     pm = _pm()
@@ -383,20 +395,103 @@ def paygo_kb() -> InlineKeyboardMarkup:
         [_btn("⬅️ برگشت", BACK_PAYMENTS)],
     ])
 
-@router.callback_query(F.data == "adm:pm:paygo")
-async def cb_paygo(cb: CallbackQuery):
+def paygo_text() -> str:
     p = _pm().paygo
-    text = (
+    enabled_text = "✅ فعال" if p.enabled else "❌ غیرفعال"
+    return (
         "🔄 <b>Pay As You Go</b>\n\n"
-        f"وضعیت: {'✅ فعال' if p.enabled else '❌ غیرفعال'}\n"
+        f"وضعیت: {enabled_text}\n"
         f"قیمت هر GB: {p.price_per_gb:,} تومان\n"
         f"قیمت هر روز: {p.price_per_day:,} تومان\n"
         f"حداقل موجودی: {p.min_balance:,} تومان\n"
         f"توقف زیر: {p.auto_suspend_below:,} تومان"
     )
-    await cb.message.edit_text(text, reply_markup=paygo_kb(), parse_mode="HTML")
+
+@router.callback_query(F.data == "adm:pm:paygo")
+async def cb_paygo(cb: CallbackQuery):
+    await cb.message.edit_text(paygo_text(), reply_markup=paygo_kb(), parse_mode="HTML")
 
 @router.callback_query(F.data == "adm:pm:pg:toggle")
 async def cb_pg_toggle(cb: CallbackQuery):
     _pm().update_paygo(enabled=not _pm().paygo.enabled)
-    await cb_paygo(cb)
+    await cb.message.edit_text(paygo_text(), reply_markup=paygo_kb(), parse_mode="HTML")
+
+@router.callback_query(F.data == "adm:pm:pg:gb")
+async def cb_pg_gb(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.pm_paygo_gb)
+    p = _pm().paygo
+    await cb.message.answer(
+        f"💰 <b>قیمت هر GB</b>\nفعلی: <b>{p.price_per_gb:,} تومان</b>\n\nعدد جدید وارد کنید:",
+        parse_mode="HTML"
+    )
+
+@router.message(AdminStates.pm_paygo_gb)
+async def fsm_pg_gb(msg: Message, state: FSMContext):
+    try:
+        val = int(msg.text.strip().replace(",", ""))
+        if val < 0: raise ValueError
+    except Exception:
+        return await msg.answer("❌ عدد نامعتبر")
+    _pm().update_paygo(price_per_gb=val)
+    await state.clear()
+    await msg.answer(f"✅ قیمت هر GB: <b>{val:,} تومان</b>", parse_mode="HTML")
+
+@router.callback_query(F.data == "adm:pm:pg:day")
+async def cb_pg_day(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.pm_paygo_day)
+    p = _pm().paygo
+    await cb.message.answer(
+        f"💰 <b>قیمت هر روز</b>\nفعلی: <b>{p.price_per_day:,} تومان</b>\n(0 = غیرفعال)\n\nعدد جدید:",
+        parse_mode="HTML"
+    )
+
+@router.message(AdminStates.pm_paygo_day)
+async def fsm_pg_day(msg: Message, state: FSMContext):
+    try:
+        val = int(msg.text.strip().replace(",", ""))
+        if val < 0: raise ValueError
+    except Exception:
+        return await msg.answer("❌ عدد نامعتبر")
+    _pm().update_paygo(price_per_day=val)
+    await state.clear()
+    await msg.answer(f"✅ قیمدت هر روز: <b>{val:,} تومان</b>", parse_mode="HTML")
+
+@router.callback_query(F.data == "adm:pm:pg:min")
+async def cb_pg_min(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.pm_paygo_min)
+    p = _pm().paygo
+    await cb.message.answer(
+        f"⚠️ <b>حداقل موجودی</b>\nفعلی: <b>{p.min_balance:,} تومان</b>\n\nمبلغ جدید:",
+        parse_mode="HTML"
+    )
+
+@router.message(AdminStates.pm_paygo_min)
+async def fsm_pg_min(msg: Message, state: FSMContext):
+    try:
+        val = int(msg.text.strip().replace(",", ""))
+        if val < 0: raise ValueError
+    except Exception:
+        return await msg.answer("❌ عدد نامعتبر")
+    _pm().update_paygo(min_balance=val)
+    await state.clear()
+    await msg.answer(f"✅ حداقل موجودی: <b>{val:,} تومان</b>", parse_mode="HTML")
+
+@router.callback_query(F.data == "adm:pm:pg:suspend")
+async def cb_pg_suspend(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.pm_paygo_suspend)
+    p = _pm().paygo
+    await cb.message.answer(
+        f"🔕 <b>توقف زیر</b>\nفعلی: <b>{p.auto_suspend_below:,} تومان</b>\n\nمبلغ جدید:",
+        parse_mode="HTML"
+    )
+
+@router.message(AdminStates.pm_paygo_suspend)
+async def fsm_pg_suspend(msg: Message, state: FSMContext):
+    try:
+        val = int(msg.text.strip().replace(",", ""))
+        if val < 0: raise ValueError
+    except Exception:
+        return await msg.answer("❌ عدد نامعتبر")
+    _pm().update_paygo(auto_suspend_below=val)
+    await state.clear()
+    await msg.answer(f"✅ توقف زیر: <b>{val:,} تومان</b>", parse_mode="HTML")
