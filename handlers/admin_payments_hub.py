@@ -81,8 +81,8 @@ async def cb_card(cb: CallbackQuery):
         f"شماره کارت: <code>{c.card_number or 'تنظیم نشده'}</code>\n"
         f"صاحب: {c.owner_name or 'تنظیم نشده'}\n"
         f"بانک: {c.bank_name or 'تنظیم نشده'}\n"
-        f"رسید اجباری: {'\u2705' if c.receipt_required else '\u274c'}\n"
-        f"تأیید خودکار: {'\u2705' if c.auto_confirm else '\u274c نیاز تأیید ادمین'}"
+        f"رسید اجباری: {'✅' if c.receipt_required else '❌'}\n"
+        f"تأیید خودکار: {'✅' if c.auto_confirm else '\u274c نیاز تأیید ادمین'}"
     )
     await cb.message.edit_text(text, reply_markup=card_kb(), parse_mode="HTML")
 
