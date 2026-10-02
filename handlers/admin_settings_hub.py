@@ -62,7 +62,7 @@ async def cb_settings_main(cb: CallbackQuery, state: FSMContext):
     from db_helpers import get_setting
     maintenance = get_setting("feat:maintenance", False)
     referral    = get_setting("feat:referral", True)
-    status_line = f"🛠️ حالت تعمیرات: {'\u2705 فعال' if maintenance else '\u274c غیرفعال'} | 🤝 رفرال: {'\u2705' if referral else '\u274c'}"
+    status_line = f"🛠️ حالت تعمیرات: {'\u2705 فعال' if maintenance else '\u274c غیرفعال'} | 🤝 رفرال: {'✅' if referral else '❌'}"
     await cb.message.edit_text(
         f"⚙️ <b>تنظیمات ربات</b>\n\n{status_line}",
         reply_markup=settings_main_kb(), parse_mode="HTML")
@@ -128,7 +128,7 @@ async def cb_set_referral(cb: CallbackQuery, state: FSMContext):
     enabled = get_setting("feat:referral", True)
     await state.set_state(SettingsStates.set_referral_reward)
     await cb.message.edit_text(
-        f"🤝 <b>پاداش رفرال</b>\nفعال: {'\u2705' if enabled else '\u274c'} | مبلغ: <b>{current:,} ت</b>\n\nمبلغ پاداش (تومان) وارد کنید (0=غیرفعال):",
+        f"🤝 <b>پاداش رفرال</b>\nفعال: {'✅' if enabled else '❌'} | مبلغ: <b>{current:,} ت</b>\n\nمبلغ پاداش (تومان) وارد کنید (0=غیرفعال):",
         reply_markup=build([[_btn("❌ لغو", "adm:settings")]]),
         parse_mode="HTML")
 
