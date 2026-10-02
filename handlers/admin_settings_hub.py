@@ -77,7 +77,7 @@ async def cb_set_support(cb: CallbackQuery, state: FSMContext):
     current = get_setting("support_username", "-")
     await state.set_state(SettingsStates.set_support_username)
     await cb.message.edit_text(
-        f"☎️ <b>نام کاربری پشتیبانی</b>\n\u0641علی: <code>{current}</code>\n\nنام کاربری جدید بدون @ وارد کنید:",
+        f"☎️ <b>نام کاربری پشتیبانی</b>\nفعلی: <code>{current}</code>\n\nنام کاربری جدید بدون @ وارد کنید:",
         reply_markup=build([[_btn("❌ لغو", "adm:settings")]]),
         parse_mode="HTML")
 
